@@ -12,12 +12,7 @@ function App() {
   const [missingSkills, setMissingSkills] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const analyzeResume = async () => {
-    if (!resume && jobText.trim() === "") {
-      alert("Please upload resume or paste job description");
-      return;
-    }
-
+  const analyzeMatch = async () => {
     setLoading(true);
 
     const formData = new FormData();
@@ -25,21 +20,20 @@ function App() {
     if (jobText) formData.append("text", jobText);
 
     try {
-      const response = await fetch(`${API_URL}/analyze`, {
+      const res = await fetch(`${API_URL}/analyze`, {
         method: "POST",
         body: formData
       });
 
-      const data = await response.json();
-      console.log("Backend response:", data); // 🔍 DEBUG
+      const data = await res.json();
+      console.log("API Response:", data);
 
-      // ✅ SAFE STATE SET (THIS FIXES EVERYTHING)
+      // ✅ DEFENSIVE STATE SET
       setMatch(data.matchPercentage ?? 0);
       setMatchedSkills(Array.isArray(data.matchedSkills) ? data.matchedSkills : []);
       setMissingSkills(Array.isArray(data.missingSkills) ? data.missingSkills : []);
-
     } catch (err) {
-      console.error("Analyze error:", err);
+      console.error(err);
       alert("Analysis failed. Check console.");
     } finally {
       setLoading(false);
@@ -62,7 +56,7 @@ function App() {
         onChange={(e) => setJobText(e.target.value)}
       />
 
-      <button onClick={analyzeResume} disabled={loading}>
+      <button onClick={analyzeMatch}>
         {loading ? "Analyzing..." : "Analyze Match"}
       </button>
 
@@ -73,8 +67,8 @@ function App() {
         <p>No matched skills found</p>
       ) : (
         <div className="skills matched">
-          {matchedSkills.map((skill, idx) => (
-            <span key={idx}>{skill}</span>
+          {matchedSkills.map((skill, i) => (
+            <span key={i}>{skill}</span>
           ))}
         </div>
       )}
@@ -84,8 +78,8 @@ function App() {
         <p>No missing skills 🎉</p>
       ) : (
         <div className="skills missing">
-          {missingSkills.map((skill, idx) => (
-            <span key={idx}>{skill}</span>
+          {missingSkills.map((skill, i) => (
+            <span key={i}>{skill}</span>
           ))}
         </div>
       )}
