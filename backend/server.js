@@ -1,133 +1,64 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const pdfParse = require("pdf-parse");
 
 const app = express();
-const upload = multer(); // memory storage
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: "*"
+}));
 
-// ==============================
-// ENTERPRISE ATS SKILL DATABASE
-// ==============================
-const ALL_SKILLS = [
-  "javascript",
-  "react",
-  "node",
-  "express",
-  "python",
-  "java",
-  "sql",
-  "mongodb",
-  "aws",
-  "docker",
-  "kubernetes",
-  "linux",
-  "git",
-  "cyber security",
-  "information security",
-  "incident response",
-  "vulnerability",
-];
+const upload = multer({ dest: "uploads/" });
 
-// ==============================
-// HEALTH CHECK
-// ==============================
 app.get("/health", (req, res) => {
   res.send("Backend is running ✅");
 });
 
-// Optional root route (avoids Cannot GET /)
-app.get("/", (req, res) => {
-  res.send("AI Resume Matcher Backend is running 🚀");
-});
+app.post("/analyze", upload.single("resume"), async (req, res) => {
+  try {
+    if (!req.file || !req.body.jobDescription) {
+      return res.status(400).json({ error: "Missing data" });
+    }
 
-// ==============================
-// ANALYZE ROUTE (ATS-CORRECT)
-// ==============================
-app.post("/analyze", upload.single("resume"), (req, res) => {
-  let resumeText = "";
+    const pdfBuffer = fs.readFileSync(req.file.path);
+    const pdfData = await pdfParse(pdfBuffer);
 
-  // Case 1: PDF uploaded
-  if (req.file) {
-    resumeText = req.file.buffer.toString("utf-8");
-  }
+    fs.unlinkSync(req.file.path); // cleanup temp file
 
-  // Case 2: Text pasted
-  if (req.body.text && req.body.text.trim().length > 0) {
-    resumeText = req.body.text;
-  }
+    const resumeText = pdfData.text.toLowerCase();
+    const jobText = req.body.jobDescription.toLowerCase();
 
-  // Safety check
-  if (!resumeText || resumeText.trim().length === 0) {
+    const skills = [
+      "javascript","react","node","express","python","java",
+      "sql","mongodb","aws","linux","git","docker","kubernetes",
+      "cyber security","incident response","vulnerability"
+    ];
+
+    const matchedSkills = skills.filter(
+      s => resumeText.includes(s) && jobText.includes(s)
+    );
+
+    const missingSkills = skills.filter(
+      s => jobText.includes(s) && !resumeText.includes(s)
+    );
+
+    const matchPercentage = jobText.length === 0
+      ? 0
+      : Math.round((matchedSkills.length / skills.length) * 100);
+
     return res.json({
-      score: 0,
-      matched: [],
-      missing: ALL_SKILLS.map((s) => ({ skill: s })),
+      matchPercentage,
+      matchedSkills,
+      missingSkills
     });
+
+  } catch (err) {
+    console.error("Analyze error:", err);
+    return res.status(500).json({ error: "Analysis failed" });
   }
-
-  resumeText = resumeText.toLowerCase();
-
-  // ✅ STRICT WORD-BOUNDARY MATCHING (REAL ATS)
-  const matched = ALL_SKILLS.filter((skill) => {
-    const regex = new RegExp(`\\b${skill.replace(" ", "\\s+")}\\b`, "i");
-    return regex.test(resumeText);
-  }).map((s) => ({ skill: s }));
-
-  const missing = ALL_SKILLS.filter((skill) => {
-    const regex = new RegExp(`\\b${skill.replace(" ", "\\s+")}\\b`, "i");
-    return !regex.test(resumeText);
-  }).map((s) => ({ skill: s }));
-
-  const score = Math.round(
-    (matched.length / ALL_SKILLS.length) * 100
-  );
-
-  res.json({ score, matched, missing });
 });
 
-// ==============================
-// PDF REPORT ROUTE
-// ==============================
-app.post("/report", (req, res) => {
-  const { score, matched, missing } = req.body;
-
-  const doc = new PDFDocument();
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader(
-    "Content-Disposition",
-    "attachment; filename=ATS_Report.pdf"
-  );
-
-  doc.pipe(res);
-
-  doc.fontSize(20).text("ATS Resume Match Report\n\n");
-  doc.fontSize(14).text(`Match Score: ${score}%\n\n`);
-
-  doc.fontSize(16).text("Matched Skills:\n");
-  matched.forEach((s) => {
-    doc.fontSize(12).text(`• ${s.skill}`);
-  });
-
-  doc.moveDown();
-
-  doc.fontSize(16).text("Missing Skills:\n");
-  missing.forEach((s) => {
-    doc.fontSize(12).text(`• ${s.skill}`);
-  });
-
-  doc.end();
-});
-
-// ==============================
-// ✅ PORT FIX FOR RENDER (MANDATORY)
-// ==============================
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
-});
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));

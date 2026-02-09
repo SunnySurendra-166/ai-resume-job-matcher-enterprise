@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./App.css";
 
+// ✅ Render backend URL
 const API_URL = "https://ai-resume-job-matcher-enterprise.onrender.com";
 
 function App() {
@@ -11,9 +12,12 @@ function App() {
   const [missingSkills, setMissingSkills] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // ==============================
+  // ✅ FINAL SAFE ANALYZE HANDLER
+  // ==============================
   const handleAnalyze = async () => {
     if (!resumeFile || !jobDesc) {
-      alert("Please upload resume and paste job description");
+      alert("Upload resume & paste job description");
       return;
     }
 
@@ -24,9 +28,13 @@ function App() {
     try {
       setLoading(true);
 
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 20000); // 20s timeout
+
       const res = await fetch(`${API_URL}/analyze`, {
         method: "POST",
-        body: formData
+        body: formData,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -35,12 +43,12 @@ function App() {
 
       const data = await res.json();
 
-      setMatch(data.matchPercentage || 0);
-      setMatchedSkills(data.matchedSkills || []);
-      setMissingSkills(data.missingSkills || []);
+      setMatch(data.matchPercentage);
+      setMatchedSkills(data.matchedSkills);
+      setMissingSkills(data.missingSkills);
     } catch (err) {
-      console.error("Analyze error:", err);
-      alert("Failed to analyze resume. Check backend logs.");
+      console.error(err);
+      alert("Analysis failed or timed out");
     } finally {
       setLoading(false);
     }
@@ -72,14 +80,18 @@ function App() {
       <h3>Matched Skills</h3>
       <div className="skills">
         {matchedSkills.map((s, i) => (
-          <span key={i} className="skill matched">{s}</span>
+          <span key={i} className="skill matched">
+            {s}
+          </span>
         ))}
       </div>
 
       <h3>Missing Skills</h3>
       <div className="skills">
         {missingSkills.map((s, i) => (
-          <span key={i} className="skill missing">{s}</span>
+          <span key={i} className="skill missing">
+            {s}
+          </span>
         ))}
       </div>
     </div>
