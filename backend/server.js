@@ -1,64 +1,117 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const fs = require("fs");
-const pdfParse = require("pdf-parse");
+const pdf = require("pdf-parse");
 
 const app = express();
+const upload = multer();
 
-app.use(cors({
-  origin: "*"
-}));
+app.use(cors());
+app.use(express.json());
 
-const upload = multer({ dest: "uploads/" });
-
+/* ============================
+   HEALTH CHECK (Render needs this)
+============================ */
 app.get("/health", (req, res) => {
   res.send("Backend is running ✅");
 });
 
+/* ============================
+   ENTERPRISE ATS SKILLS
+============================ */
+const ALL_SKILLS = [
+  "javascript",
+  "react",
+  "node",
+  "express",
+  "python",
+  "java",
+  "sql",
+  "mongodb",
+  "aws",
+  "docker",
+  "kubernetes",
+  "linux",
+  "git",
+  "cyber security",
+  "information security",
+  "incident response",
+  "vulnerability"
+];
+
+/* ============================
+   ANALYZE ROUTE (FINAL FIX)
+============================ */
 app.post("/analyze", upload.single("resume"), async (req, res) => {
   try {
-    if (!req.file || !req.body.jobDescription) {
-      return res.status(400).json({ error: "Missing data" });
+    let resumeText = "";
+    let jobDescription = "";
+
+    /* ---------- PDF UPLOAD ---------- */
+    if (req.file && req.file.buffer) {
+      const data = await pdf(req.file.buffer);
+      resumeText = data.text || "";
     }
 
-    const pdfBuffer = fs.readFileSync(req.file.path);
-    const pdfData = await pdfParse(pdfBuffer);
+    /* ---------- TEXT INPUT ---------- */
+    if (req.body.text && req.body.text.trim().length > 0) {
+      jobDescription = req.body.text;
+    }
 
-    fs.unlinkSync(req.file.path); // cleanup temp file
+    // 🔍 DEBUG LOGS (VERY IMPORTANT)
+    console.log("===== DEBUG =====");
+    console.log("Resume text length:", resumeText.length);
+    console.log("Job description length:", jobDescription.length);
 
-    const resumeText = pdfData.text.toLowerCase();
-    const jobText = req.body.jobDescription.toLowerCase();
+    // ❌ Safety check
+    if (!resumeText.trim()) {
+      return res.json({
+        matchPercentage: 0,
+        matchedSkills: [],
+        missingSkills: ALL_SKILLS
+      });
+    }
 
-    const skills = [
-      "javascript","react","node","express","python","java",
-      "sql","mongodb","aws","linux","git","docker","kubernetes",
-      "cyber security","incident response","vulnerability"
-    ];
+    const combinedText = `${resumeText} ${jobDescription}`.toLowerCase();
 
-    const matchedSkills = skills.filter(
-      s => resumeText.includes(s) && jobText.includes(s)
+    /* ---------- STRICT ATS MATCHING ---------- */
+    const matchedSkills = [];
+    const missingSkills = [];
+
+    for (const skill of ALL_SKILLS) {
+      const regex = new RegExp(`\\b${skill.replace(" ", "\\s+")}\\b`, "i");
+      if (regex.test(combinedText)) {
+        matchedSkills.push(skill);
+      } else {
+        missingSkills.push(skill);
+      }
+    }
+
+    const matchPercentage = Math.round(
+      (matchedSkills.length / ALL_SKILLS.length) * 100
     );
 
-    const missingSkills = skills.filter(
-      s => jobText.includes(s) && !resumeText.includes(s)
-    );
-
-    const matchPercentage = jobText.length === 0
-      ? 0
-      : Math.round((matchedSkills.length / skills.length) * 100);
-
+    /* ---------- FINAL RESPONSE (MANDATORY FORMAT) ---------- */
     return res.json({
       matchPercentage,
       matchedSkills,
       missingSkills
     });
 
-  } catch (err) {
-    console.error("Analyze error:", err);
-    return res.status(500).json({ error: "Analysis failed" });
+  } catch (error) {
+    console.error("Analyze error:", error);
+    return res.status(500).json({
+      matchPercentage: 0,
+      matchedSkills: [],
+      missingSkills: ALL_SKILLS
+    });
   }
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+/* ============================
+   START SERVER (Render compatible)
+============================ */
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
+});
