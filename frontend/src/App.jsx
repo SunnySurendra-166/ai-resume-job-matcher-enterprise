@@ -5,54 +5,45 @@ const API_URL = "https://ai-resume-job-matcher-enterprise.onrender.com";
 
 function App() {
   const [resumeFile, setResumeFile] = useState(null);
-  const [jobDescription, setJobDescription] = useState("");
-  const [match, setMatch] = useState(null);
+  const [jobDesc, setJobDesc] = useState("");
+  const [match, setMatch] = useState(0);
   const [matchedSkills, setMatchedSkills] = useState([]);
   const [missingSkills, setMissingSkills] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleAnalyze = async () => {
-    if (!resumeFile || !jobDescription) {
+    if (!resumeFile || !jobDesc) {
       alert("Please upload resume and paste job description");
       return;
     }
 
-    setLoading(true);
-    setError("");
-    setMatch(null);
-    setMatchedSkills([]);
-    setMissingSkills([]);
-
     const formData = new FormData();
     formData.append("resume", resumeFile);
-    formData.append("jobDescription", jobDescription);
+    formData.append("jobDescription", jobDesc);
 
     try {
-      const response = await fetch(`${API_URL}/analyze`, {
+      setLoading(true);
+
+      const res = await fetch(`${API_URL}/analyze`, {
         method: "POST",
         body: formData
       });
 
-      if (!response.ok) {
+      if (!res.ok) {
         throw new Error("Backend error");
       }
 
-      const data = await response.json();
+      const data = await res.json();
 
-      setMatch(data.matchPercentage);
+      setMatch(data.matchPercentage || 0);
       setMatchedSkills(data.matchedSkills || []);
       setMissingSkills(data.missingSkills || []);
     } catch (err) {
-      console.error(err);
-      setError("Failed to analyze resume. Try again.");
+      console.error("Analyze error:", err);
+      alert("Failed to analyze resume. Check backend logs.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDownloadPDF = () => {
-    window.open(`${API_URL}/download-report`, "_blank");
   };
 
   return (
@@ -66,45 +57,31 @@ function App() {
       />
 
       <textarea
-        placeholder="Paste Job Description here..."
-        value={jobDescription}
-        onChange={(e) => setJobDescription(e.target.value)}
-        rows={10}
+        placeholder="Paste job description here..."
+        value={jobDesc}
+        onChange={(e) => setJobDesc(e.target.value)}
+        rows={8}
       />
 
       <button onClick={handleAnalyze} disabled={loading}>
         {loading ? "Analyzing..." : "Analyze Match"}
       </button>
 
-      {error && <p className="error">{error}</p>}
+      <h2>{match}% Match</h2>
 
-      {match !== null && (
-        <>
-          <h2>{match}% Match</h2>
+      <h3>Matched Skills</h3>
+      <div className="skills">
+        {matchedSkills.map((s, i) => (
+          <span key={i} className="skill matched">{s}</span>
+        ))}
+      </div>
 
-          <h3>Matched Skills</h3>
-          <div className="skills">
-            {matchedSkills.map((skill, i) => (
-              <span key={i} className="skill matched">
-                {skill}
-              </span>
-            ))}
-          </div>
-
-          <h3>Missing Skills</h3>
-          <div className="skills">
-            {missingSkills.map((skill, i) => (
-              <span key={i} className="skill missing">
-                {skill}
-              </span>
-            ))}
-          </div>
-
-          <button onClick={handleDownloadPDF}>
-            Download PDF Report
-          </button>
-        </>
-      )}
+      <h3>Missing Skills</h3>
+      <div className="skills">
+        {missingSkills.map((s, i) => (
+          <span key={i} className="skill missing">{s}</span>
+        ))}
+      </div>
     </div>
   );
 }
