@@ -4,72 +4,65 @@ import "./App.css";
 const API_URL = "https://ai-resume-job-matcher-enterprise.onrender.com";
 
 function App() {
-  const [resumeFile, setResumeFile] = useState(null);
-  const [jobDescription, setJobDescription] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [resume, setResume] = useState(null);
+  const [jobText, setJobText] = useState("");
 
   const [match, setMatch] = useState(0);
   const [matchedSkills, setMatchedSkills] = useState([]);
   const [missingSkills, setMissingSkills] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const analyzeMatch = async () => {
-    if (!resumeFile || !jobDescription.trim()) {
-      alert("Please upload resume and paste job description");
+  const analyzeResume = async () => {
+    if (!resume && jobText.trim() === "") {
+      alert("Please upload resume or paste job description");
       return;
     }
 
     setLoading(true);
-    setMatch(0);
-    setMatchedSkills([]);
-    setMissingSkills([]);
 
     const formData = new FormData();
-    formData.append("resume", resumeFile);
-    formData.append("jobDescription", jobDescription);
+    if (resume) formData.append("resume", resume);
+    if (jobText) formData.append("text", jobText);
 
     try {
       const response = await fetch(`${API_URL}/analyze`, {
         method: "POST",
-        body: formData,
+        body: formData
       });
 
-      if (!response.ok) {
-        throw new Error("Backend error");
-      }
-
       const data = await response.json();
+      console.log("Backend response:", data); // 🔍 DEBUG
 
-      // ✅ SAFE defaults (THIS FIXES THE CRASH)
-      setMatch(data.matchPercentage || 0);
+      // ✅ SAFE STATE SET (THIS FIXES EVERYTHING)
+      setMatch(data.matchPercentage ?? 0);
       setMatchedSkills(Array.isArray(data.matchedSkills) ? data.matchedSkills : []);
       setMissingSkills(Array.isArray(data.missingSkills) ? data.missingSkills : []);
 
-    } catch (error) {
-      console.error("Analyze failed:", error);
-      alert("Analysis failed. Please try again.");
+    } catch (err) {
+      console.error("Analyze error:", err);
+      alert("Analysis failed. Check console.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="app">
+    <div className="container">
       <h1>AI Resume Job Matcher</h1>
 
       <input
         type="file"
         accept=".pdf"
-        onChange={(e) => setResumeFile(e.target.files[0])}
+        onChange={(e) => setResume(e.target.files[0])}
       />
 
       <textarea
         placeholder="Paste job description here..."
-        rows="8"
-        value={jobDescription}
-        onChange={(e) => setJobDescription(e.target.value)}
+        value={jobText}
+        onChange={(e) => setJobText(e.target.value)}
       />
 
-      <button onClick={analyzeMatch} disabled={loading}>
+      <button onClick={analyzeResume} disabled={loading}>
         {loading ? "Analyzing..." : "Analyze Match"}
       </button>
 
@@ -79,11 +72,9 @@ function App() {
       {matchedSkills.length === 0 ? (
         <p>No matched skills found</p>
       ) : (
-        <div className="skills">
-          {matchedSkills.map((skill, index) => (
-            <span key={index} className="skill matched">
-              {skill}
-            </span>
+        <div className="skills matched">
+          {matchedSkills.map((skill, idx) => (
+            <span key={idx}>{skill}</span>
           ))}
         </div>
       )}
@@ -92,11 +83,9 @@ function App() {
       {missingSkills.length === 0 ? (
         <p>No missing skills 🎉</p>
       ) : (
-        <div className="skills">
-          {missingSkills.map((skill, index) => (
-            <span key={index} className="skill missing">
-              {skill}
-            </span>
+        <div className="skills missing">
+          {missingSkills.map((skill, idx) => (
+            <span key={idx}>{skill}</span>
           ))}
         </div>
       )}
