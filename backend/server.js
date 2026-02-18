@@ -2,24 +2,33 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const pdf = require("pdf-parse");
+const fs = require("fs");
+require("dotenv").config();
 
 const app = express();
-const upload = multer();
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
 
-/* ============================
-   HEALTH CHECK (Render needs this)
-============================ */
+// --------------------
+// MULTER CONFIG
+// --------------------
+const upload = multer({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
+
+// --------------------
+// HEALTH ROUTE
+// --------------------
 app.get("/health", (req, res) => {
   res.send("Backend is running ✅");
 });
 
-/* ============================
-   ENTERPRISE ATS SKILLS
-============================ */
-const ALL_SKILLS = [
+// --------------------
+// SKILLS LIST
+// --------------------
+const skillsList = [
   "javascript",
   "react",
   "node",
@@ -33,85 +42,69 @@ const ALL_SKILLS = [
   "kubernetes",
   "linux",
   "git",
-  "cyber security",
-  "information security",
-  "incident response",
-  "vulnerability"
+  "data structures",
+  "backend development",
+  "database systems"
 ];
 
-/* ============================
-   ANALYZE ROUTE (FINAL FIX)
-============================ */
+// --------------------
+// ANALYZE ROUTE
+// --------------------
 app.post("/analyze", upload.single("resume"), async (req, res) => {
   try {
-    let resumeText = "";
-    let jobDescription = "";
-
-    /* ---------- PDF UPLOAD ---------- */
-    if (req.file && req.file.buffer) {
-      const data = await pdf(req.file.buffer);
-      resumeText = data.text || "";
-    }
-
-    /* ---------- TEXT INPUT ---------- */
-    if (req.body.text && req.body.text.trim().length > 0) {
-      jobDescription = req.body.text;
-    }
-
-    // 🔍 DEBUG LOGS (VERY IMPORTANT)
-    console.log("===== DEBUG =====");
-    console.log("Resume text length:", resumeText.length);
-    console.log("Job description length:", jobDescription.length);
-
-    // ❌ Safety check
-    if (!resumeText.trim()) {
-      return res.json({
+    if (!req.file) {
+      return res.status(400).json({
         matchPercentage: 0,
         matchedSkills: [],
-        missingSkills: ALL_SKILLS
+        missingSkills: []
       });
     }
 
-    const combinedText = `${resumeText} ${jobDescription}`.toLowerCase();
+    const buffer = req.file.buffer;
 
-    /* ---------- STRICT ATS MATCHING ---------- */
+    const data = await pdf(buffer);
+    const resumeText = data.text.toLowerCase();
+    const jobDescription = (req.body.jobDescription || "").toLowerCase();
+
+    console.log("Resume text:", resumeText);
+    console.log("Job description:", jobDescription);
+
     const matchedSkills = [];
     const missingSkills = [];
 
-    for (const skill of ALL_SKILLS) {
-      const regex = new RegExp(`\\b${skill.replace(" ", "\\s+")}\\b`, "i");
-      if (regex.test(combinedText)) {
+    skillsList.forEach(skill => {
+      if (
+        resumeText.includes(skill) &&
+        jobDescription.includes(skill)
+      ) {
         matchedSkills.push(skill);
-      } else {
+      } else if (jobDescription.includes(skill)) {
         missingSkills.push(skill);
       }
-    }
+    });
 
-    const matchPercentage = Math.round(
-      (matchedSkills.length / ALL_SKILLS.length) * 100
-    );
+    const matchPercentage =
+      skillsList.length === 0
+        ? 0
+        : Math.round((matchedSkills.length / skillsList.length) * 100);
 
-    /* ---------- FINAL RESPONSE (MANDATORY FORMAT) ---------- */
-    return res.json({
-      matchPercentage,
-      matchedSkills,
-      missingSkills
+    res.json({
+      matchPercentage: matchPercentage || 0,
+      matchedSkills: matchedSkills || [],
+      missingSkills: missingSkills || []
     });
 
   } catch (error) {
-    console.error("Analyze error:", error);
-    return res.status(500).json({
+    console.error("Error analyzing resume:", error);
+    res.status(500).json({
       matchPercentage: 0,
       matchedSkills: [],
-      missingSkills: ALL_SKILLS
+      missingSkills: []
     });
   }
 });
 
-/* ============================
-   START SERVER (Render compatible)
-============================ */
-const PORT = process.env.PORT || 5000;
+// --------------------
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });

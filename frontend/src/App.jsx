@@ -1,90 +1,118 @@
 import { useState } from "react";
-import "./App.css";
 
 const API_URL = "https://ai-resume-job-matcher-enterprise.onrender.com";
 
 function App() {
   const [resume, setResume] = useState(null);
-  const [jobText, setJobText] = useState("");
-
-  const [match, setMatch] = useState(0);
+  const [jobDescription, setJobDescription] = useState("");
+  const [matchPercentage, setMatchPercentage] = useState(0);
   const [matchedSkills, setMatchedSkills] = useState([]);
   const [missingSkills, setMissingSkills] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const analyzeMatch = async () => {
+    if (!resume) {
+      alert("Please upload resume");
+      return;
+    }
+
     setLoading(true);
 
     const formData = new FormData();
-    if (resume) formData.append("resume", resume);
-    if (jobText) formData.append("text", jobText);
+    formData.append("resume", resume);
+    formData.append("jobDescription", jobDescription);
 
     try {
-      const res = await fetch(`${API_URL}/analyze`, {
+      const response = await fetch(`${API_URL}/analyze`, {
         method: "POST",
         body: formData
       });
 
-      const data = await res.json();
-      console.log("API Response:", data);
+      const data = await response.json();
 
-      // ✅ DEFENSIVE STATE SET
-      setMatch(data.matchPercentage ?? 0);
-      setMatchedSkills(Array.isArray(data.matchedSkills) ? data.matchedSkills : []);
-      setMissingSkills(Array.isArray(data.missingSkills) ? data.missingSkills : []);
-    } catch (err) {
-      console.error(err);
-      alert("Analysis failed. Check console.");
-    } finally {
-      setLoading(false);
+      console.log("Response:", data);
+
+      setMatchPercentage(data.matchPercentage || 0);
+      setMatchedSkills(data.matchedSkills || []);
+      setMissingSkills(data.missingSkills || []);
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Error connecting to backend");
     }
+
+    setLoading(false);
   };
 
   return (
-    <div className="container">
-      <h1>AI Resume Job Matcher</h1>
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <h1>AI Resume Job Matcher</h1>
 
-      <input
-        type="file"
-        accept=".pdf"
-        onChange={(e) => setResume(e.target.files[0])}
-      />
+        <input
+          type="file"
+          accept=".pdf"
+          onChange={(e) => setResume(e.target.files[0])}
+        />
 
-      <textarea
-        placeholder="Paste job description here..."
-        value={jobText}
-        onChange={(e) => setJobText(e.target.value)}
-      />
+        <textarea
+          placeholder="Paste job description..."
+          value={jobDescription}
+          onChange={(e) => setJobDescription(e.target.value)}
+          style={styles.textarea}
+        />
 
-      <button onClick={analyzeMatch}>
-        {loading ? "Analyzing..." : "Analyze Match"}
-      </button>
+        <button onClick={analyzeMatch} style={styles.button}>
+          {loading ? "Analyzing..." : "Analyze Match"}
+        </button>
 
-      <h2>{match}% Match</h2>
+        <h2>{matchPercentage}% Match</h2>
 
-      <h3>Matched Skills</h3>
-      {matchedSkills.length === 0 ? (
-        <p>No matched skills found</p>
-      ) : (
-        <div className="skills matched">
-          {matchedSkills.map((skill, i) => (
-            <span key={i}>{skill}</span>
-          ))}
-        </div>
-      )}
+        <h3>Matched Skills</h3>
+        {matchedSkills.length === 0 ? (
+          <p>No matched skills found</p>
+        ) : (
+          matchedSkills.map((skill, index) => (
+            <p key={index}>{skill}</p>
+          ))
+        )}
 
-      <h3>Missing Skills</h3>
-      {missingSkills.length === 0 ? (
-        <p>No missing skills 🎉</p>
-      ) : (
-        <div className="skills missing">
-          {missingSkills.map((skill, i) => (
-            <span key={i}>{skill}</span>
-          ))}
-        </div>
-      )}
+        <h3>Missing Skills</h3>
+        {missingSkills.length === 0 ? (
+          <p>No missing skills 🎉</p>
+        ) : (
+          missingSkills.map((skill, index) => (
+            <p key={index}>{skill}</p>
+          ))
+        )}
+      </div>
     </div>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "linear-gradient(to right, #6a11cb, #2575fc)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  card: {
+    background: "white",
+    padding: "40px",
+    borderRadius: "10px",
+    width: "500px"
+  },
+  textarea: {
+    width: "100%",
+    height: "120px",
+    marginTop: "10px",
+    marginBottom: "10px"
+  },
+  button: {
+    padding: "10px 20px",
+    marginBottom: "20px"
+  }
+};
 
 export default App;
