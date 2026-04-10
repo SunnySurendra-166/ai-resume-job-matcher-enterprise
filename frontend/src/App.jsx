@@ -1,118 +1,132 @@
 import { useState } from "react";
+import axios from "axios";
 
-const API_URL = "https://ai-resume-job-matcher-enterprise.onrender.com";
-
-function App() {
+export default function App() {
   const [resume, setResume] = useState(null);
-  const [jobDescription, setJobDescription] = useState("");
-  const [matchPercentage, setMatchPercentage] = useState(0);
-  const [matchedSkills, setMatchedSkills] = useState([]);
-  const [missingSkills, setMissingSkills] = useState([]);
+  const [jobDesc, setJobDesc] = useState("");
+  const [parsed, setParsed] = useState(false);
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const analyzeMatch = async () => {
+  const parseResume = () => {
     if (!resume) {
-      alert("Please upload resume");
+      alert("Upload resume first");
+      return;
+    }
+    setParsed(true);
+    setResult(null);
+  };
+
+  const analyze = async () => {
+    if (!parsed || !jobDesc) {
+      alert("Parse resume and enter job description");
       return;
     }
 
-    setLoading(true);
-
     const formData = new FormData();
     formData.append("resume", resume);
-    formData.append("jobDescription", jobDescription);
+    formData.append("jobDescription", jobDesc);
 
     try {
-      const response = await fetch(`${API_URL}/analyze`, {
-        method: "POST",
-        body: formData
-      });
+      setLoading(true);
 
-      const data = await response.json();
+      const res = await axios.post(
+        "http://127.0.0.1:5000/analyze",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
 
-      console.log("Response:", data);
-
-      setMatchPercentage(data.matchPercentage || 0);
-      setMatchedSkills(data.matchedSkills || []);
-      setMissingSkills(data.missingSkills || []);
-    } catch (error) {
-      console.error("Error:", error);
-      alert("Error connecting to backend");
+      setResult(res.data);
+    } catch (err) {
+      console.error(err);
+      alert("Backend error");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h1>AI Resume Job Matcher</h1>
+    <div style={{
+      height: "100vh",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      background: "linear-gradient(135deg, #667eea, #764ba2, #ff6a88)"
+    }}>
+      <div style={{
+        width: "420px",
+        background: "#fff",
+        padding: "25px",
+        borderRadius: "15px",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+      }}>
+        <h2 style={{ textAlign: "center" }}>
+          AI Resume Job Matcher
+        </h2>
 
+        {/* Upload */}
         <input
           type="file"
-          accept=".pdf"
-          onChange={(e) => setResume(e.target.files[0])}
+          onChange={(e) => {
+            setResume(e.target.files[0]);
+            setParsed(false);
+          }}
         />
 
+        {/* Parse */}
+        <button
+          onClick={parseResume}
+          style={{ width: "100%", marginTop: "10px" }}
+        >
+          {parsed ? "✓ Parsed" : "Parse Resume"}
+        </button>
+
+        {/* Job Description */}
         <textarea
           placeholder="Paste job description..."
-          value={jobDescription}
-          onChange={(e) => setJobDescription(e.target.value)}
-          style={styles.textarea}
+          rows="4"
+          style={{ width: "100%", marginTop: "10px" }}
+          onChange={(e) => setJobDesc(e.target.value)}
+          disabled={!parsed}
         />
 
-        <button onClick={analyzeMatch} style={styles.button}>
+        {/* Analyze */}
+        <button
+          onClick={analyze}
+          style={{
+            width: "100%",
+            marginTop: "10px",
+            background: "#6c63ff",
+            color: "#fff",
+            padding: "10px",
+            borderRadius: "8px",
+            border: "none"
+          }}
+        >
           {loading ? "Analyzing..." : "Analyze Match"}
         </button>
 
-        <h2>{matchPercentage}% Match</h2>
+        {/* Result */}
+        {result && (
+          <div style={{ marginTop: "15px" }}>
+            <h3>Match: {result.matchPercentage}%</h3>
 
-        <h3>Matched Skills</h3>
-        {matchedSkills.length === 0 ? (
-          <p>No matched skills found</p>
-        ) : (
-          matchedSkills.map((skill, index) => (
-            <p key={index}>{skill}</p>
-          ))
-        )}
+            <p><b>Matched Skills:</b></p>
+            <ul>
+              {result.matchedSkills.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
 
-        <h3>Missing Skills</h3>
-        {missingSkills.length === 0 ? (
-          <p>No missing skills 🎉</p>
-        ) : (
-          missingSkills.map((skill, index) => (
-            <p key={index}>{skill}</p>
-          ))
+            <p><b>Missing Skills:</b></p>
+            <ul>
+              {result.missingSkills.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </div>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "linear-gradient(to right, #6a11cb, #2575fc)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  card: {
-    background: "white",
-    padding: "40px",
-    borderRadius: "10px",
-    width: "500px"
-  },
-  textarea: {
-    width: "100%",
-    height: "120px",
-    marginTop: "10px",
-    marginBottom: "10px"
-  },
-  button: {
-    padding: "10px 20px",
-    marginBottom: "20px"
-  }
-};
-
-export default App;

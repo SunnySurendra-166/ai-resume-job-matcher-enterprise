@@ -1,110 +1,89 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const pdf = require("pdf-parse");
-const fs = require("fs");
-require("dotenv").config();
+const pdfParse = require("pdf-parse");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+/* ---------- MIDDLEWARE ---------- */
+app.use(cors({ origin: true }));
 app.use(express.json());
 
-// --------------------
-// MULTER CONFIG
-// --------------------
-const upload = multer({
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+/* ---------- FILE UPLOAD ---------- */
+const upload = multer({ storage: multer.memoryStorage() });
+
+/* ---------- TEST ROUTE ---------- */
+app.get("/", (req, res) => {
+  res.send("Backend running ✅");
 });
 
-// --------------------
-// HEALTH ROUTE
-// --------------------
-app.get("/health", (req, res) => {
-  res.send("Backend is running ✅");
-});
-
-// --------------------
-// SKILLS LIST
-// --------------------
-const skillsList = [
-  "javascript",
-  "react",
-  "node",
-  "express",
-  "python",
-  "java",
-  "sql",
-  "mongodb",
-  "aws",
-  "docker",
-  "kubernetes",
-  "linux",
-  "git",
-  "data structures",
-  "backend development",
-  "database systems"
-];
-
-// --------------------
-// ANALYZE ROUTE
-// --------------------
+/* ---------- ANALYZE ---------- */
 app.post("/analyze", upload.single("resume"), async (req, res) => {
   try {
+    console.log("🔥 API HIT");
+
     if (!req.file) {
-      return res.status(400).json({
-        matchPercentage: 0,
-        matchedSkills: [],
-        missingSkills: []
-      });
+      return res.status(400).json({ error: "No resume uploaded" });
     }
 
-    const buffer = req.file.buffer;
+    if (!req.body.jobDescription) {
+      return res.status(400).json({ error: "No job description" });
+    }
 
-    const data = await pdf(buffer);
-    const resumeText = data.text.toLowerCase();
-    const jobDescription = (req.body.jobDescription || "").toLowerCase();
+    /* ---------- PARSE PDF ---------- */
+    const data = await pdfParse(req.file.buffer);
 
-    console.log("Resume text:", resumeText);
-    console.log("Job description:", jobDescription);
+    let resumeText = data.text.toLowerCase();
+    let jobText = req.body.jobDescription.toLowerCase();
 
-    const matchedSkills = [];
-    const missingSkills = [];
+    /* ---------- NORMALIZE PHRASES ---------- */
+    jobText = jobText.replace("deep learning", "deeplearning");
 
-    skillsList.forEach(skill => {
-      if (
-        resumeText.includes(skill) &&
-        jobDescription.includes(skill)
-      ) {
-        matchedSkills.push(skill);
-      } else if (jobDescription.includes(skill)) {
-        missingSkills.push(skill);
-      }
-    });
+    /* ---------- EXTRACT WORDS FROM JD ---------- */
+    let words = jobText.split(/\W+/).filter(w => w.length > 2);
 
-    const matchPercentage =
-      skillsList.length === 0
-        ? 0
-        : Math.round((matchedSkills.length / skillsList.length) * 100);
+    /* ---------- EXTRA SKILLS (IMPORTANT) ---------- */
+    const extraSkills = [
+      "django","flask","tensorflow","deeplearning",
+      "blockchain","graphql","kafka","redis",
+      "angular","vue","flutter","swift","kotlin"
+    ];
 
+    /* ---------- COMBINE JD SKILLS ---------- */
+    const jdSkills = [...new Set([
+      ...words,
+      ...extraSkills.filter(skill => jobText.includes(skill))
+    ])];
+
+    /* ---------- MATCHED ---------- */
+    const matchedSkills = jdSkills.filter(skill =>
+      resumeText.includes(skill)
+    );
+
+    /* ---------- MISSING ---------- */
+    const missingSkills = jdSkills.filter(skill =>
+      !resumeText.includes(skill)
+    );
+
+    /* ---------- SCORE ---------- */
+    const matchPercentage = Math.round(
+      (matchedSkills.length / (jdSkills.length || 1)) * 100
+    );
+
+    /* ---------- RESPONSE ---------- */
     res.json({
-      matchPercentage: matchPercentage || 0,
-      matchedSkills: matchedSkills || [],
-      missingSkills: missingSkills || []
+      matchPercentage,
+      matchedSkills,
+      missingSkills
     });
 
-  } catch (error) {
-    console.error("Error analyzing resume:", error);
-    res.status(500).json({
-      matchPercentage: 0,
-      matchedSkills: [],
-      missingSkills: []
-    });
+  } catch (err) {
+    console.error("❌ ERROR:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// --------------------
-app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
+/* ---------- START SERVER ---------- */
+app.listen(5000, () => {
+  console.log("✅ Backend running at http://127.0.0.1:5000");
 });
